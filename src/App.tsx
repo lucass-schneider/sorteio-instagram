@@ -78,6 +78,10 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      <footer className="app-footer container">
+        <a href="./privacidade.html">Política de Privacidade</a>
+      </footer>
     </>
   )
 }
