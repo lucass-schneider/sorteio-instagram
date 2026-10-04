@@ -1,12 +1,12 @@
 // Publica a pasta dist/ na branch gh-pages (GitHub Pages) sem mexer na branch atual.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const git = (args, env = {}) =>
   execFileSync('git', args, { encoding: 'utf8', env: { ...process.env, ...env } }).trim()
 
-execFileSync('npm', ['run', 'build'], { stdio: 'inherit', shell: true })
+execSync('npm run build', { stdio: 'inherit' })
 writeFileSync(join('dist', '.nojekyll'), '')
 
 const gitDir = resolve(git(['rev-parse', '--git-dir']))
