@@ -4,7 +4,7 @@ compatibility_date = "2026-06-01"
 
 [vars]
 # "ID do app do Instagram" (painel da Meta > Configuração da API com login do Instagram). Não é segredo.
-INSTAGRAM_APP_ID = ""
+INSTAGRAM_APP_ID = "3828920790582369"
 # Precisa ser idêntico ao "URI de redirecionamento OAuth" cadastrado no painel da Meta.
 REDIRECT_URI = "https://lucass-schneider.github.io/sorteio-instagram/"
 
