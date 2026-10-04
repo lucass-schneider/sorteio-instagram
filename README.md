@@ -3,6 +3,8 @@
 App React (Vite + TypeScript) para sortear participantes a partir dos comentários de uma publicação,
 com critérios configuráveis.
 
+**Acesse:** https://lucass-schneider.github.io/sorteio-instagram/
+
 ## Rodar
 
 ```bash
@@ -10,6 +12,7 @@ npm install
 npm run dev      # abre em http://localhost:5173
 npm test         # testes das regras, importação e sorteio
 npm run build    # gera a versão estática em dist/
+npm run deploy   # publica dist/ na branch gh-pages (GitHub Pages)
 ```
 
 > O `.npmrc` desta pasta aponta para o registry público do npm, para não usar o registry da empresa
