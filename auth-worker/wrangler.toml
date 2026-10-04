@@ -1,0 +1,11 @@
+name = "sorteio-instagram-auth"
+main = "index.ts"
+compatibility_date = "2026-06-01"
+
+[vars]
+# "ID do app do Instagram" (painel da Meta > Configuração da API com login do Instagram). Não é segredo.
+INSTAGRAM_APP_ID = ""
+# Precisa ser idêntico ao "URI de redirecionamento OAuth" cadastrado no painel da Meta.
+REDIRECT_URI = "https://lucass-schneider.github.io/sorteio-instagram/"
+
+# A chave secreta NÃO fica aqui. Cadastre com:  npm run auth:secret

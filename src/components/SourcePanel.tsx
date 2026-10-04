@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
+import { instagramLoginEnabled, useInstagramLogin } from '../lib/auth'
 import { demoComments } from '../lib/demo'
-import { fetchPostComments } from '../lib/instagram'
+import { fetchPostComments, InvalidTokenError, tokenKind } from '../lib/instagram'
 import { parseImport } from '../lib/parse'
 import type { IgComment } from '../lib/types'
 
@@ -19,6 +20,16 @@ interface Props {
 type Tab = 'api' | 'import'
 type Status = { kind: 'idle' | 'loading' | 'error'; message: string }
 
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function SourcePanel({ info, count, onLoaded }: Props) {
   const [tab, setTab] = useState<Tab>('api')
   const [link, setLink] = useState('')
@@ -27,6 +38,11 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle', message: '' })
   const abortRef = useRef<AbortController | null>(null)
+  const { session, status: loginStatus, login, logout } = useInstagramLogin()
+
+  // Um token digitado manualmente tem prioridade sobre o login.
+  const manualToken = token.trim()
+  const activeToken = manualToken || session?.token || ''
 
   async function handleFetch() {
     abortRef.current?.abort()
@@ -36,9 +52,10 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
     try {
       const result = await fetchPostComments(
         link,
-        token,
+        activeToken,
         (message) => setStatus({ kind: 'loading', message }),
         controller.signal,
+        manualToken ? tokenKind(manualToken) : 'instagram',
       )
       const warnings: string[] = []
       if (result.expectedCount && result.comments.length < result.expectedCount) {
@@ -56,6 +73,9 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         setStatus({ kind: 'idle', message: '' })
+      } else if (err instanceof InvalidTokenError && !manualToken && session) {
+        setStatus({ kind: 'idle', message: '' })
+        logout('Sua sessão do Instagram expirou. Entre de novo.')
       } else {
         setStatus({ kind: 'error', message: (err as Error).message })
       }
@@ -85,6 +105,29 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
 
   const loading = status.kind === 'loading'
 
+  function tokenField(required: boolean) {
+    return (
+      <label className="field">
+        <span>Token de acesso da Meta</span>
+        <div className="input-with-button">
+          <input
+            type={showToken ? 'text' : 'password'}
+            placeholder="IGAA… ou EAA…"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            required={required}
+          />
+          <button type="button" className="ghost" onClick={() => setShowToken((v) => !v)}>
+            {showToken ? 'Ocultar' : 'Mostrar'}
+          </button>
+        </div>
+        <small className="muted">O token fica só nesta aba e é enviado apenas para a API da Meta.</small>
+      </label>
+    )
+  }
+
   return (
     <section className="card">
       <header className="card-header">
@@ -97,7 +140,7 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
 
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'api'} className={tab === 'api' ? 'active' : ''} onClick={() => setTab('api')}>
-          Link + API do Instagram
+          Buscar no Instagram
         </button>
         <button role="tab" aria-selected={tab === 'import'} className={tab === 'import' ? 'active' : ''} onClick={() => setTab('import')}>
           Importar arquivo / texto
@@ -112,6 +155,36 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
             handleFetch()
           }}
         >
+          {instagramLoginEnabled && (
+            <div className="account">
+              {session ? (
+                <>
+                  <span className="account-icon">
+                    <InstagramIcon />
+                  </span>
+                  <span className="account-name">
+                    Conectado como <strong>{session.username ? `@${session.username}` : 'sua conta'}</strong>
+                  </span>
+                  <button type="button" className="ghost" onClick={() => logout()}>
+                    Sair
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="primary instagram" onClick={login} disabled={loginStatus.kind === 'loading'}>
+                    <InstagramIcon />
+                    Entrar com Instagram
+                  </button>
+                  <small className="muted">
+                    Você autoriza no Instagram e volta para cá. Precisa ser uma conta Profissional (Comercial ou Criador de
+                    conteúdo), e só dá para buscar publicações dela.
+                  </small>
+                </>
+              )}
+            </div>
+          )}
+          {loginStatus.kind !== 'idle' && <p className={`status ${loginStatus.kind}`}>{loginStatus.message}</p>}
+
           <label className="field">
             <span>Link da publicação</span>
             <input
@@ -122,27 +195,11 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
               required
             />
           </label>
-          <label className="field">
-            <span>Token de acesso da Meta</span>
-            <div className="input-with-button">
-              <input
-                type={showToken ? 'text' : 'password'}
-                placeholder="IGAA… ou EAA…"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-              />
-              <button type="button" className="ghost" onClick={() => setShowToken((v) => !v)}>
-                {showToken ? 'Ocultar' : 'Mostrar'}
-              </button>
-            </div>
-            <small className="muted">O token fica só na memória desta aba e é enviado apenas para a API da Meta.</small>
-          </label>
+
+          {!instagramLoginEnabled && tokenField(true)}
 
           <div className="actions">
-            <button type="submit" className="primary" disabled={loading}>
+            <button type="submit" className="primary" disabled={loading || (instagramLoginEnabled && !activeToken)}>
               {loading ? 'Buscando…' : 'Buscar comentários'}
             </button>
             {loading && (
@@ -153,7 +210,8 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
           </div>
 
           <details className="help">
-            <summary>Por que precisa de token? Como conseguir um?</summary>
+            <summary>{instagramLoginEnabled ? 'Usar um token manualmente (avançado)' : 'Por que precisa de token? Como conseguir um?'}</summary>
+            {instagramLoginEnabled && tokenField(false)}
             <p>
               O Instagram não libera comentários só pelo link: sem login, a página bloqueia o acesso e o navegador
               impede leituras de outro site. O caminho oficial é a API da Meta, que funciona para publicações da{' '}

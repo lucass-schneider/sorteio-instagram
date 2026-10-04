@@ -10,6 +10,11 @@ import type { IgComment } from './types'
 const GRAPH_VERSION = 'v23.0'
 const MAX_MEDIA_SCAN = 5000
 
+/** Token inválido ou expirado (erro 190 da API). */
+export class InvalidTokenError extends Error {}
+
+export type TokenKind = 'instagram' | 'facebook'
+
 export interface FetchProgress {
   (message: string): void
 }
@@ -47,8 +52,12 @@ export function extractShortcode(link: string): string | null {
   return match ? match[1] : null
 }
 
-function baseUrl(token: string): string {
-  return token.startsWith('IG')
+export function tokenKind(token: string): TokenKind {
+  return token.trim().startsWith('IG') ? 'instagram' : 'facebook'
+}
+
+function baseUrl(kind: TokenKind): string {
+  return kind === 'instagram'
     ? `https://graph.instagram.com/${GRAPH_VERSION}`
     : `https://graph.facebook.com/${GRAPH_VERSION}`
 }
@@ -65,7 +74,7 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   if (!response.ok || body?.error) {
     const message: string = body?.error?.message ?? `HTTP ${response.status}`
     if (body?.error?.code === 190) {
-      throw new Error(`Token inválido ou expirado. Gere um novo token e tente de novo. (${message})`)
+      throw new InvalidTokenError(`Token inválido ou expirado. (${message})`)
     }
     throw new Error(`API do Instagram: ${message}`)
   }
@@ -93,15 +102,16 @@ function sameShortcode(media: ApiMedia, shortcode: string): boolean {
 
 async function findMedia(
   token: string,
+  kind: TokenKind,
   shortcode: string,
   onProgress: FetchProgress,
   signal?: AbortSignal,
 ): Promise<ApiMedia> {
-  const base = baseUrl(token)
+  const base = baseUrl(kind)
   const fields = 'id,permalink,username,comments_count'
 
   let accountIds: string[]
-  if (token.startsWith('IG')) {
+  if (kind === 'instagram') {
     accountIds = ['me']
   } else {
     const accounts = await getJson<Paged<{ instagram_business_account?: { id: string } }>>(
@@ -144,27 +154,33 @@ function toComment(c: ApiComment, isReply: boolean): IgComment {
   }
 }
 
+export async function fetchUsername(token: string): Promise<string | undefined> {
+  const me = await getJson<{ username?: string }>(withToken(`${baseUrl('instagram')}/me?fields=username`, token))
+  return me.username
+}
+
 export async function fetchPostComments(
   linkOrMediaId: string,
   token: string,
   onProgress: FetchProgress,
   signal?: AbortSignal,
+  kind: TokenKind = tokenKind(token),
 ): Promise<FetchResult> {
   token = token.trim()
   const input = linkOrMediaId.trim()
-  if (!token) throw new Error('Informe o token de acesso.')
+  if (!token) throw new Error('Entre com o Instagram ou informe um token de acesso.')
 
+  const base = baseUrl(kind)
   let media: ApiMedia
   if (/^\d+$/.test(input)) {
-    media = await getJson<ApiMedia>(withToken(`${baseUrl(token)}/${input}?fields=id,permalink,username,comments_count`, token), signal)
+    media = await getJson<ApiMedia>(withToken(`${base}/${input}?fields=id,permalink,username,comments_count`, token), signal)
   } else {
     const shortcode = extractShortcode(input)
     if (!shortcode) throw new Error('Link inválido. Use algo como https://www.instagram.com/p/XXXXXXXX/')
     onProgress('Procurando a publicação…')
-    media = await findMedia(token, shortcode, onProgress, signal)
+    media = await findMedia(token, kind, shortcode, onProgress, signal)
   }
 
-  const base = baseUrl(token)
   const commentFields = 'id,text,timestamp,username'
   const url = `${base}/${media.id}/comments?fields=${commentFields},replies.limit(100){${commentFields}}&limit=100`
 

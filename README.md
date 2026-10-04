@@ -28,6 +28,27 @@ npm run deploy   # publica dist/ na branch gh-pages (GitHub Pages)
 
 O Instagram não permite ler comentários só com o link (sem login/API), por isso o token é necessário.
 
+## Login com Instagram (configuração única)
+
+O botão "Entrar com Instagram" só aparece quando o site é publicado com `VITE_INSTAGRAM_APP_ID` e
+`VITE_AUTH_API_URL`. O login precisa de um pequeno servidor (`auth-worker/`, Cloudflare Workers, gratuito)
+porque a troca do código pelo token usa a chave secreta do app, que não pode ficar no site.
+
+1. **Meta** – em https://developers.facebook.com/apps, crie um app com o caso de uso do Instagram
+   (*API com login do Instagram*). Em *Configurar o login comercial do Instagram*, cadastre o URI de
+   redirecionamento `https://lucass-schneider.github.io/sorteio-instagram/`. Anote o **ID do app do Instagram**
+   e a **Chave secreta do app do Instagram**. Enquanto o app estiver em desenvolvimento, adicione sua conta
+   como testadora do Instagram em *Funções do app* e aceite o convite no Instagram.
+2. **Servidor de login** – crie uma conta gratuita na Cloudflare e rode:
+   ```bash
+   npx wrangler login        # abre o navegador para autorizar
+   # coloque o ID do app em INSTAGRAM_APP_ID, no arquivo auth-worker/wrangler.toml
+   npm run auth:secret       # cole a chave secreta quando pedir (ela não fica no código)
+   npm run auth:deploy       # mostra a URL do servidor (…workers.dev)
+   ```
+3. **Site** – crie `.env.production` a partir de `.env.example` com o ID do app e a URL do servidor e rode
+   `npm run deploy`.
+
 ## Critérios disponíveis
 
 - Mínimo e máximo de pessoas marcadas por comentário (ex.: exatamente 2)

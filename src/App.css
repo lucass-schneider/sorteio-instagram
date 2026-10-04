@@ -760,3 +760,50 @@ button:focus-visible,
     animation: none;
   }
 }
+
+/* ---------- Login com Instagram ---------- */
+
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.account small {
+  flex: 1 1 260px;
+}
+
+.account-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--gradient);
+  color: #fff;
+}
+
+.account-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.primary.instagram {
+  background: var(--gradient);
+  padding: 10px 18px;
+}
+
+.primary.instagram:hover:not(:disabled) {
+  background: var(--gradient);
+  filter: brightness(1.08);
+}
+
+.help > .field {
+  margin-top: 12px;
+}

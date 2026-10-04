@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "auth:secret": "wrangler secret put INSTAGRAM_APP_SECRET --config auth-worker/wrangler.toml",
+    "auth:deploy": "wrangler deploy --config auth-worker/wrangler.toml"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -23,6 +25,7 @@
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.147.0"
   }
 }
