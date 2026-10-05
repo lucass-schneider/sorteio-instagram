@@ -21,7 +21,17 @@ export interface InstagramSession {
   expiresAt?: number
 }
 
-type LoginStatus = { kind: 'idle' | 'loading' | 'error'; message: string }
+/** Situação do login; o texto é escolhido pela tela, no idioma atual. */
+export type LoginCode = 'finishing' | 'cancelled' | 'notCompleted' | 'badState' | 'serverUnreachable' | 'failed' | 'expired'
+export type LoginStatus = { kind: 'idle' } | { kind: 'loading' | 'error'; code: LoginCode; detail?: string }
+
+class LoginError extends Error {
+  code: LoginCode
+  constructor(code: LoginCode, detail?: string) {
+    super(detail ?? code)
+    this.code = code
+  }
+}
 
 /** Precisa ser idêntico ao URI de redirecionamento cadastrado no painel da Meta. */
 function redirectUri(): string {
@@ -71,7 +81,7 @@ function startLogin() {
   window.location.assign(`https://www.instagram.com/oauth/authorize?${params}`)
 }
 
-type RedirectResult = { code: string } | { error: string } | null
+type RedirectResult = { code: string } | { error: LoginCode; detail?: string } | null
 
 /** Lê o retorno do Instagram (?code=… ou ?error=…) e já limpa a URL. */
 function consumeRedirect(): RedirectResult {
@@ -94,10 +104,10 @@ function consumeRedirect(): RedirectResult {
   window.history.replaceState(null, '', url.href)
 
   if (error) {
-    return { error: error === 'access_denied' ? 'Login cancelado.' : `Login não concluído: ${description ?? error}` }
+    return error === 'access_denied' ? { error: 'cancelled' } : { error: 'notCompleted', detail: description ?? error }
   }
   if (!expected || state !== expected) {
-    return { error: 'Não foi possível confirmar o login. Tente entrar de novo.' }
+    return { error: 'badState' }
   }
   return { code: code! }
 }
@@ -111,11 +121,11 @@ async function exchangeCode(code: string): Promise<InstagramSession> {
       body: JSON.stringify({ code }),
     })
   } catch (err) {
-    throw new Error('Não foi possível falar com o servidor de login.', { cause: err })
+    throw new LoginError('serverUnreachable', String(err))
   }
   const body = (await response.json().catch(() => null)) as { access_token?: string; expires_in?: number; error?: string } | null
   if (!response.ok || !body?.access_token) {
-    throw new Error(body?.error ?? `Servidor de login respondeu HTTP ${response.status}`)
+    throw new LoginError('failed', body?.error ?? `HTTP ${response.status}`)
   }
   const session: InstagramSession = {
     token: body.access_token,
@@ -131,9 +141,9 @@ const redirect = instagramLoginEnabled ? consumeRedirect() : null
 let pendingExchange: Promise<InstagramSession> | null = null
 
 function initialStatus(): LoginStatus {
-  if (redirect && 'error' in redirect) return { kind: 'error', message: redirect.error }
-  if (redirect && 'code' in redirect) return { kind: 'loading', message: 'Concluindo login com o Instagram…' }
-  return { kind: 'idle', message: '' }
+  if (redirect && 'error' in redirect) return { kind: 'error', code: redirect.error, detail: redirect.detail }
+  if (redirect && 'code' in redirect) return { kind: 'loading', code: 'finishing' }
+  return { kind: 'idle' }
 }
 
 export function useInstagramLogin() {
@@ -151,20 +161,20 @@ export function useInstagramLogin() {
       .then((s) => {
         if (!active) return
         setSession(s)
-        setStatus({ kind: 'idle', message: '' })
+        setStatus({ kind: 'idle' })
       })
       .catch((err: Error) => {
-        if (active) setStatus({ kind: 'error', message: err.message })
+        if (active) setStatus({ kind: 'error', code: err instanceof LoginError ? err.code : 'failed', detail: err.message })
       })
     return () => {
       active = false
     }
   }, [])
 
-  function logout(message = '') {
+  function logout(reason?: LoginCode) {
     writeSession(null)
     setSession(null)
-    setStatus(message ? { kind: 'error', message } : { kind: 'idle', message: '' })
+    setStatus(reason ? { kind: 'error', code: reason } : { kind: 'idle' })
   }
 
   return { session, status, login: startLogin, logout }

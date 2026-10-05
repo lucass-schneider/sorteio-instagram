@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { useI18n } from '../i18n/context'
 import { DEFAULT_RULES } from '../lib/rules'
 import type { Rules } from '../lib/types'
 
@@ -13,14 +14,16 @@ function NumberField({
   value,
   onChange,
   min = 0,
-  optional = false,
+  placeholder,
 }: {
   label: string
   value: number | null
   onChange: (value: number | null) => void
   min?: number
-  optional?: boolean
+  /** Quando informado, o campo aceita ficar vazio (= sem limite). */
+  placeholder?: string
 }) {
+  const optional = placeholder !== undefined
   // Rascunho enquanto o campo está em edição, para permitir apagar e redigitar.
   const [draft, setDraft] = useState<string | null>(null)
 
@@ -32,7 +35,7 @@ function NumberField({
         min={min}
         step={1}
         inputMode="numeric"
-        placeholder={optional ? 'sem limite' : undefined}
+        placeholder={placeholder}
         value={draft ?? (value === null ? '' : String(value))}
         onChange={(e) => {
           const raw = e.target.value
@@ -60,6 +63,8 @@ function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (
 }
 
 export function RulesPanel({ rules, onChange, owner }: Props) {
+  const { t } = useI18n()
+  const r = t.rules
   const set = <K extends keyof Rules>(key: K, value: Rules[K]) => onChange({ ...rules, [key]: value })
 
   return (
@@ -67,52 +72,52 @@ export function RulesPanel({ rules, onChange, owner }: Props) {
       <header className="card-header">
         <span className="step">2</span>
         <div>
-          <h2>Critérios</h2>
-          <p className="muted">A lista de participantes atualiza na hora.</p>
+          <h2>{r.title}</h2>
+          <p className="muted">{r.subtitle}</p>
         </div>
       </header>
 
       <div className="presets">
         <button className="chip" onClick={() => onChange({ ...rules, minMentions: 2, maxMentions: 2 })}>
-          Marcar exatamente 2 pessoas
+          {r.presetExact2}
         </button>
         <button className="chip" onClick={() => onChange({ ...rules, maxComments: 2, overLimit: 'disqualify' })}>
-          Até 2 comentários por pessoa
+          {r.presetMax2}
         </button>
         <button className="chip" onClick={() => onChange({ ...rules, uniqueMentionsAcrossComments: true })}>
-          Sem repetir amigos
+          {r.presetNoRepeat}
         </button>
         <button className="chip subtle" onClick={() => onChange(DEFAULT_RULES)}>
-          Limpar critérios
+          {r.presetClear}
         </button>
       </div>
 
       <fieldset>
-        <legend>Em cada comentário</legend>
+        <legend>{r.perComment}</legend>
         <div className="row">
-          <NumberField label="Mínimo de marcações (@)" value={rules.minMentions} onChange={(v) => set('minMentions', v ?? 0)} />
-          <NumberField label="Máximo de marcações (@)" value={rules.maxMentions} onChange={(v) => set('maxMentions', v)} optional />
+          <NumberField label={r.minMentions} value={rules.minMentions} onChange={(v) => set('minMentions', v ?? 0)} />
+          <NumberField label={r.maxMentions} value={rules.maxMentions} onChange={(v) => set('maxMentions', v)} placeholder={r.noLimit} />
         </div>
         <Toggle checked={rules.ignoreSelfMention} onChange={(v) => set('ignoreSelfMention', v)}>
-          Marcar a si mesmo não conta
+          {r.ignoreSelf}
         </Toggle>
         <Toggle checked={rules.uniqueMentionsAcrossComments} onChange={(v) => set('uniqueMentionsAcrossComments', v)}>
-          Não pode repetir a mesma pessoa em comentários diferentes
+          {r.noRepeat}
         </Toggle>
         <label className="field">
-          <span>Marcações que não contam</span>
+          <span>{r.ignoredMentions}</span>
           <input
             type="text"
-            placeholder={owner ? `@${owner}` : '@perfil_do_sorteio'}
+            placeholder={owner ? `@${owner}` : r.ignoredPlaceholder}
             value={rules.ignoredMentions}
             onChange={(e) => set('ignoredMentions', e.target.value)}
           />
         </label>
         <label className="field">
-          <span>Texto ou hashtag obrigatório</span>
+          <span>{r.requiredText}</span>
           <input
             type="text"
-            placeholder="ex.: #euquero"
+            placeholder={r.requiredTextPlaceholder}
             value={rules.requiredText}
             onChange={(e) => set('requiredText', e.target.value)}
           />
@@ -120,43 +125,43 @@ export function RulesPanel({ rules, onChange, owner }: Props) {
       </fieldset>
 
       <fieldset>
-        <legend>Por pessoa</legend>
+        <legend>{r.perPerson}</legend>
         <div className="row">
-          <NumberField label="Mínimo de comentários válidos" value={rules.minComments} min={1} onChange={(v) => set('minComments', v ?? 1)} />
-          <NumberField label="Máximo de comentários" value={rules.maxComments} min={1} onChange={(v) => set('maxComments', v)} optional />
+          <NumberField label={r.minComments} value={rules.minComments} min={1} onChange={(v) => set('minComments', v ?? 1)} />
+          <NumberField label={r.maxComments} value={rules.maxComments} min={1} onChange={(v) => set('maxComments', v)} placeholder={r.noLimit} />
         </div>
         {rules.maxComments !== null && (
           <label className="field">
-            <span>Quem comentar mais que o máximo</span>
+            <span>{r.overLimit}</span>
             <select value={rules.overLimit} onChange={(e) => set('overLimit', e.target.value as Rules['overLimit'])}>
-              <option value="disqualify">É desclassificado</option>
-              <option value="firstN">Valem só os primeiros {rules.maxComments}</option>
+              <option value="disqualify">{r.overDisqualify}</option>
+              <option value="firstN">{r.overFirstN(rules.maxComments)}</option>
             </select>
           </label>
         )}
         <label className="field">
-          <span>Chances no sorteio</span>
+          <span>{r.entries}</span>
           <select value={rules.ticketMode} onChange={(e) => set('ticketMode', e.target.value as Rules['ticketMode'])}>
-            <option value="perUser">Uma chance por pessoa</option>
-            <option value="perComment">Uma chance por comentário válido</option>
+            <option value="perUser">{r.perUser}</option>
+            <option value="perComment">{r.perValidComment}</option>
           </select>
         </label>
       </fieldset>
 
       <fieldset>
-        <legend>Geral</legend>
+        <legend>{r.general}</legend>
         <label className="field">
-          <span>Prazo final dos comentários</span>
+          <span>{r.deadline}</span>
           <input type="datetime-local" value={rules.deadline} onChange={(e) => set('deadline', e.target.value)} />
         </label>
         <Toggle checked={rules.includeReplies} onChange={(v) => set('includeReplies', v)}>
-          Respostas a outros comentários também contam
+          {r.includeReplies}
         </Toggle>
         <label className="field">
-          <span>Perfis que não participam</span>
+          <span>{r.excluded}</span>
           <textarea
             rows={2}
-            placeholder={owner ? `@${owner}, @funcionario` : '@perfil_do_sorteio, @funcionario'}
+            placeholder={owner ? `@${owner}, @…` : r.excludedPlaceholder}
             value={rules.excludedUsers}
             onChange={(e) => set('excludedUsers', e.target.value)}
           />

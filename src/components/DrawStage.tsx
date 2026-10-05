@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { useI18n } from '../i18n/context'
 import type { ParticipantResult } from '../lib/types'
 
 export type StagePhase = 'list' | 'countdown' | 'done'
@@ -31,6 +32,8 @@ function validComments(p: ParticipantResult) {
 }
 
 export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onClose }: Props) {
+  const { t } = useI18n()
+  const s = t.stage
   const entries = useMemo(
     () =>
       shuffled(pool.flatMap((p) => validComments(p).map((c) => ({ id: c.comment.id, username: p.username, text: c.comment.text })))).slice(
@@ -62,15 +65,12 @@ export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onC
   const loopSeconds = Math.max(8, entries.length * 0.35)
 
   return (
-    <div className="stage" role="dialog" aria-modal="true" aria-label="Sorteio">
+    <div className="stage" role="dialog" aria-modal="true" aria-label={s.label}>
       <div className="stage-inner">
         {phase === 'list' && (
           <>
-            <p className="stage-kicker">Participando do sorteio</p>
-            <h2 className="stage-title">
-              {pool.length} {pool.length === 1 ? 'perfil' : 'perfis'} · {totalComments}{' '}
-              {totalComments === 1 ? 'comentário válido' : 'comentários válidos'}
-            </h2>
+            <p className="stage-kicker">{s.participating}</p>
+            <h2 className="stage-title">{s.summary(pool.length, totalComments)}</h2>
             <div className="stage-list">
               <ul className="stage-scroll" style={{ animationDuration: `${loopSeconds}s` }}>
                 {/* Lista duplicada para a rolagem dar a volta sem emenda. */}
@@ -87,7 +87,7 @@ export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onC
 
         {phase === 'countdown' && (
           <>
-            <p className="stage-kicker">O resultado sai em</p>
+            <p className="stage-kicker">{s.countdown}</p>
             <div key={count} className="stage-count" aria-live="assertive">
               {count}
             </div>
@@ -96,11 +96,11 @@ export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onC
 
         {phase === 'done' && (
           <div className="stage-result" aria-live="assertive">
-            <p className="stage-kicker">{winners.length > 1 ? 'Ganhadores' : 'Ganhador(a)'}</p>
+            <p className="stage-kicker">{winners.length > 1 ? s.winners : s.winner}</p>
             {winners.map((w, i) => (
               <div key={w.username} className="stage-winner" style={{ animationDelay: `${i * 200}ms` }}>
                 <span className="stage-winner-name">
-                  {winners.length > 1 && <small>{i + 1}º </small>}@{w.username}
+                  {winners.length > 1 && <small>{s.ordinal(i + 1)} </small>}@{w.username}
                 </span>
                 {validComments(w)
                   .slice(0, 2)
@@ -113,7 +113,7 @@ export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onC
             ))}
             {alternates.length > 0 && (
               <p className="stage-alternates">
-                Suplentes: {alternates.map((a, i) => `${i + 1}º @${a.username}`).join(' · ')}
+                {s.alternates}: {alternates.map((a, i) => `${s.ordinal(i + 1)} @${a.username}`).join(' · ')}
               </p>
             )}
           </div>
@@ -123,11 +123,11 @@ export function DrawStage({ phase, pool, count, winners, alternates, onSkip, onC
       <div className="stage-actions">
         {phase === 'done' ? (
           <button className="stage-button" onClick={onClose} autoFocus>
-            Fechar
+            {s.close}
           </button>
         ) : (
           <button className="stage-button ghost-dark" onClick={onSkip}>
-            Pular animação
+            {s.skip}
           </button>
         )}
       </div>

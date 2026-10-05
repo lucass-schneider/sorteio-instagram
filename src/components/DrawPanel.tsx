@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useI18n } from '../i18n/context'
+import type { Messages } from '../i18n/ui'
 import { drawWinners } from '../lib/random'
 import { describeRules } from '../lib/rules'
 import type { Evaluation, ParticipantResult, Rules } from '../lib/types'
@@ -18,19 +20,20 @@ interface DrawResult {
 /** Quanto tempo a lista de comentários aparece antes da contagem. */
 const LIST_MS = 6000
 
-function resultText(result: DrawResult): string {
+function resultText(result: DrawResult, t: Messages): string {
+  const r = t.draw.resultText
   const lines = [
-    `Sorteio realizado em ${result.at.toLocaleString('pt-BR')}`,
-    `Participantes aptos: ${result.qualified} (${result.tickets} chances)`,
+    r.heading(result.at.toLocaleString(t.locale)),
+    r.qualified(result.qualified, result.tickets),
     '',
-    'Critérios:',
-    ...result.rules.map((r) => `- ${r}`),
+    r.rules,
+    ...result.rules.map((rule) => `- ${rule}`),
     '',
-    result.winners.length > 1 ? 'Ganhadores:' : 'Ganhador(a):',
-    ...result.winners.map((w, i) => `${i + 1}º @${w.username}`),
+    result.winners.length > 1 ? r.winners : r.winner,
+    ...result.winners.map((w, i) => `${r.ordinal(i + 1)} @${w.username}`),
   ]
   if (result.alternates.length) {
-    lines.push('', 'Suplentes:', ...result.alternates.map((w, i) => `${i + 1}º @${w.username}`))
+    lines.push('', r.alternates, ...result.alternates.map((w, i) => `${r.ordinal(i + 1)} @${w.username}`))
   }
   return lines.join('\n')
 }
@@ -54,6 +57,8 @@ function WinnerCard({ participant, label, delay }: { participant: ParticipantRes
 }
 
 export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules: Rules }) {
+  const { t } = useI18n()
+  const d = t.draw
   const [winnersCount, setWinnersCount] = useState(1)
   const [alternatesCount, setAlternatesCount] = useState(0)
   const [countdownSeconds, setCountdownSeconds] = useState(5)
@@ -90,10 +95,11 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
     const final: DrawResult = {
       winners: picked.slice(0, winnersCount),
       alternates: picked.slice(winnersCount),
+      // oxlint-disable-next-line react/purity -- start() só roda no clique, não durante a renderização
       at: new Date(),
       qualified: pool.length,
       tickets: evaluation.stats.tickets,
-      rules: describeRules(rules),
+      rules: describeRules(rules, t.rule, t.locale),
       evaluation,
     }
 
@@ -113,7 +119,7 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
   async function copy() {
     if (!result) return
     try {
-      await navigator.clipboard.writeText(resultText(result))
+      await navigator.clipboard.writeText(resultText(result, t))
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -126,18 +132,16 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
       <header className="card-header">
         <span className="step">4</span>
         <div>
-          <h2>Sorteio</h2>
+          <h2>{d.title}</h2>
           <p className="muted">
-            {pool.length === 0
-              ? 'Nenhum participante apto ainda.'
-              : `${pool.length} ${pool.length === 1 ? 'perfil apto' : 'perfis aptos'} · ${evaluation.stats.tickets} chances`}
+            {pool.length === 0 ? d.none : d.summary(pool.length, evaluation.stats.tickets)}
           </p>
         </div>
       </header>
 
       <div className="row draw-controls">
         <label className="field">
-          <span>Ganhadores</span>
+          <span>{d.winners}</span>
           <input
             type="number"
             min={1}
@@ -147,7 +151,7 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
           />
         </label>
         <label className="field">
-          <span>Suplentes</span>
+          <span>{d.alternates}</span>
           <input
             type="number"
             min={0}
@@ -157,23 +161,23 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
           />
         </label>
         <label className="field">
-          <span>Contagem</span>
+          <span>{d.countdown}</span>
           <select value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))}>
             {[3, 5, 10].map((n) => (
               <option key={n} value={n}>
-                {n} segundos
+                {d.seconds(n)}
               </option>
             ))}
           </select>
         </label>
         <button className="primary big" disabled={!canDraw} onClick={start}>
-          {running ? 'Sorteando…' : result ? 'Sortear de novo' : 'Sortear'}
+          {running ? d.drawing : result ? d.again : d.start}
         </button>
       </div>
 
       {pool.length > 0 && requested > pool.length && (
         <p className="status warn">
-          Pediu {requested} {requested === 1 ? 'nome' : 'nomes'}, mas só há {pool.length} {pool.length === 1 ? 'perfil apto' : 'perfis aptos'}.
+          {d.tooMany(requested, pool.length)}
         </p>
       )}
 
@@ -192,21 +196,21 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
       {result && (
         <div className="result" aria-live="polite">
           {result.evaluation !== evaluation && (
-            <p className="status warn">Os critérios ou os comentários mudaram depois deste sorteio.</p>
+            <p className="status warn">{d.changed}</p>
           )}
           <div className="winners">
             {result.winners.map((w, i) => (
               <WinnerCard
                 key={w.username}
                 participant={w}
-                label={result.winners.length > 1 ? `${i + 1}º ganhador` : 'Ganhador(a)'}
+                label={result.winners.length > 1 ? d.nthWinner(i + 1) : d.winner}
                 delay={i * 150}
               />
             ))}
           </div>
           {result.alternates.length > 0 && (
             <>
-              <h3>Suplentes</h3>
+              <h3>{d.alternates}</h3>
               <ol className="alternates">
                 {result.alternates.map((a) => (
                   <li key={a.username}>
@@ -220,11 +224,10 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
           )}
           <div className="result-footer">
             <small className="muted">
-              Sorteado em {result.at.toLocaleString('pt-BR')} entre {result.qualified} perfis aptos ({result.tickets} chances), com
-              gerador aleatório criptográfico do navegador.
+              {d.footer(result.at.toLocaleString(t.locale), result.qualified, result.tickets)}
             </small>
             <button className="ghost" onClick={copy}>
-              {copied ? 'Copiado!' : 'Copiar resultado'}
+              {copied ? d.copied : d.copy}
             </button>
           </div>
         </div>

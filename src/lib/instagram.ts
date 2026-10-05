@@ -1,3 +1,4 @@
+import { apiText, type ApiText } from '../i18n/lib'
 import type { IgComment } from './types'
 
 /**
@@ -66,21 +67,21 @@ function baseUrl(kind: TokenKind): string {
     : `https://graph.facebook.com/${GRAPH_VERSION}`
 }
 
-async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+async function getJson<T>(url: string, signal?: AbortSignal, t: ApiText = apiText.pt): Promise<T> {
   let response: Response
   try {
     response = await fetch(url, { signal })
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err
-    throw new Error('Falha de rede ao acessar a API da Meta. Verifique sua conexão.', { cause: err })
+    throw new Error(t.network, { cause: err })
   }
   const body = await response.json().catch(() => null)
   if (!response.ok || body?.error) {
     const message: string = body?.error?.message ?? `HTTP ${response.status}`
     if (body?.error?.code === 190) {
-      throw new InvalidTokenError(`Token inválido ou expirado. (${message})`)
+      throw new InvalidTokenError(t.invalidToken(message))
     }
-    throw new Error(`API do Instagram: ${message}`)
+    throw new Error(t.apiError(message))
   }
   return body as T
 }
@@ -91,10 +92,10 @@ function withToken(url: string, token: string): string {
   return url + (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token)
 }
 
-async function* pages<T>(firstUrl: string, token: string, signal?: AbortSignal): AsyncGenerator<T[]> {
+async function* pages<T>(firstUrl: string, token: string, signal?: AbortSignal, t?: ApiText): AsyncGenerator<T[]> {
   let next: string | undefined = withToken(firstUrl, token)
   while (next) {
-    const page: Paged<T> = await getJson<Paged<T>>(next, signal)
+    const page: Paged<T> = await getJson<Paged<T>>(next, signal, t)
     yield page.data ?? []
     next = page.paging?.next
   }
@@ -109,7 +110,8 @@ async function findMedia(
   kind: TokenKind,
   shortcode: string,
   onProgress: FetchProgress,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  t: ApiText,
 ): Promise<ApiMedia> {
   const base = baseUrl(kind)
   const fields = 'id,permalink,username,comments_count'
@@ -121,31 +123,26 @@ async function findMedia(
     const accounts = await getJson<Paged<{ instagram_business_account?: { id: string } }>>(
       withToken(`${base}/me/accounts?fields=instagram_business_account&limit=100`, token),
       signal,
+      t,
     )
     accountIds = accounts.data.flatMap((p) => (p.instagram_business_account ? [p.instagram_business_account.id] : []))
     if (accountIds.length === 0) {
-      throw new Error(
-        'Nenhuma conta do Instagram Profissional encontrada nas Páginas deste token. ' +
-          'Confira se a conta está ligada a uma Página do Facebook e se o token tem a permissão instagram_basic.',
-      )
+      throw new Error(t.noProfessionalAccount)
     }
   }
 
   let scanned = 0
   for (const accountId of accountIds) {
-    for await (const batch of pages<ApiMedia>(`${base}/${accountId}/media?fields=${fields}&limit=100`, token, signal)) {
+    for await (const batch of pages<ApiMedia>(`${base}/${accountId}/media?fields=${fields}&limit=100`, token, signal, t)) {
       const found = batch.find((m) => sameShortcode(m, shortcode))
       if (found) return found
       scanned += batch.length
-      onProgress(`Procurando a publicação… ${scanned} posts verificados`)
+      onProgress(t.searchingCount(scanned))
       if (scanned >= MAX_MEDIA_SCAN) break
     }
   }
 
-  throw new Error(
-    `Publicação não encontrada entre os ${scanned} posts da(s) conta(s) deste token. ` +
-      'A API só acessa publicações da sua própria conta Profissional. Se for sua, tente colar o ID da mídia.',
-  )
+  throw new Error(t.notFound(scanned))
 }
 
 function toComment(c: ApiComment, isReply: boolean): IgComment {
@@ -169,20 +166,21 @@ export async function fetchPostComments(
   onProgress: FetchProgress,
   signal?: AbortSignal,
   kind: TokenKind = tokenKind(token),
+  t: ApiText = apiText.pt,
 ): Promise<FetchResult> {
   token = token.trim()
   const input = linkOrMediaId.trim()
-  if (!token) throw new Error('Entre com o Instagram ou informe um token de acesso.')
+  if (!token) throw new Error(t.noToken)
 
   const base = baseUrl(kind)
   let media: ApiMedia
   if (/^\d+$/.test(input)) {
-    media = await getJson<ApiMedia>(withToken(`${base}/${input}?fields=id,permalink,username,comments_count`, token), signal)
+    media = await getJson<ApiMedia>(withToken(`${base}/${input}?fields=id,permalink,username,comments_count`, token), signal, t)
   } else {
     const shortcode = extractShortcode(input)
-    if (!shortcode) throw new Error('Link inválido. Use algo como https://www.instagram.com/p/XXXXXXXX/')
-    onProgress('Procurando a publicação…')
-    media = await findMedia(token, kind, shortcode, onProgress, signal)
+    if (!shortcode) throw new Error(t.badLink)
+    onProgress(t.searching)
+    media = await findMedia(token, kind, shortcode, onProgress, signal, t)
   }
 
   // O @ pode vir em "username" ou em "from"; pedimos os dois.
@@ -196,7 +194,7 @@ export async function fetchPostComments(
       sampleFields = Object.keys(c).concat(c.from ? Object.keys(c.from).map((k) => `from.${k}`) : [])
     }
   }
-  for await (const batch of pages<ApiComment>(url, token, signal)) {
+  for await (const batch of pages<ApiComment>(url, token, signal, t)) {
     for (const c of batch) {
       inspect(c)
       comments.push(toComment(c, false))
@@ -205,13 +203,13 @@ export async function fetchPostComments(
         // Respostas além da primeira página.
         let next = c.replies.paging?.next
         while (next) {
-          const page: Paged<ApiComment> = await getJson<Paged<ApiComment>>(withToken(next, token), signal)
+          const page: Paged<ApiComment> = await getJson<Paged<ApiComment>>(withToken(next, token), signal, t)
           page.data.forEach((r) => comments.push(toComment(r, true)))
           next = page.paging?.next
         }
       }
     }
-    onProgress(`Baixando comentários… ${comments.length}${media.comments_count ? ` de ~${media.comments_count}` : ''}`)
+    onProgress(t.downloading(comments.length, media.comments_count))
   }
 
   return {

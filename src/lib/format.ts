@@ -1,5 +1,5 @@
-export function formatDate(iso?: string): string {
+export function formatDate(iso: string | undefined, locale = 'pt-BR'): string {
   if (!iso) return ''
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' })
 }

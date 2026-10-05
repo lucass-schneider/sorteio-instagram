@@ -1,3 +1,4 @@
+import { parseText, type ParseText } from '../i18n/lib'
 import type { IgComment } from './types'
 
 export interface ParseResult {
@@ -97,19 +98,19 @@ function fromJsonItem(item: Record<string, unknown>, index: number, isReply: boo
   })
 }
 
-function parseJson(text: string): ParseResult {
+function parseJson(text: string, t: ParseText): ParseResult {
   let data: unknown = JSON.parse(text)
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const obj = data as Record<string, unknown>
     data = obj.comments ?? obj.data ?? obj.items ?? obj.comentarios ?? [obj]
   }
-  if (!Array.isArray(data)) throw new Error('JSON precisa ser uma lista de comentários.')
+  if (!Array.isArray(data)) throw new Error(t.jsonNotList)
 
   const comments: IgComment[] = []
   data.forEach((item, i) => {
     if (item && typeof item === 'object') fromJsonItem(item as Record<string, unknown>, i, false, comments)
   })
-  const warnings = comments.length < data.length ? [`${data.length - comments.length} item(ns) sem usuário foram ignorados.`] : []
+  const warnings = comments.length < data.length ? [t.jsonSkipped(data.length - comments.length)] : []
   return { comments, warnings }
 }
 
@@ -167,7 +168,7 @@ function looksLikeCsv(firstLine: string): boolean {
   return hasUser && hasText
 }
 
-function parseCsv(text: string): ParseResult {
+function parseCsv(text: string, t: ParseText): ParseResult {
   const firstLine = text.split(/\r?\n/, 1)[0]
   const rows = parseCsvRows(text, detectDelimiter(firstLine))
   const [header, ...body] = rows
@@ -194,8 +195,8 @@ function parseCsv(text: string): ParseResult {
       isReply: replyCol >= 0 ? toBool(row[replyCol]) : false,
     })
   })
-  const warnings = skipped ? [`${skipped} linha(s) sem usuário foram ignoradas.`] : []
-  if (dateCol < 0) warnings.push('Sem coluna de data: o filtro de prazo e a ordem dos comentários não podem ser aplicados.')
+  const warnings = skipped ? [t.csvSkipped(skipped)] : []
+  if (dateCol < 0) warnings.push(t.csvNoDate)
   return { comments, warnings }
 }
 
@@ -203,7 +204,7 @@ function parseCsv(text: string): ParseResult {
 
 const LINE_RE = /^@?([A-Za-z0-9._]{1,30})\s*(?::|\t)\s*(.*)$/
 
-function parseLines(text: string): ParseResult {
+function parseLines(text: string, t: ParseText): ParseResult {
   const comments: IgComment[] = []
   const bad: number[] = []
   text.split(/\r?\n/).forEach((line, i) => {
@@ -213,16 +214,16 @@ function parseLines(text: string): ParseResult {
     else bad.push(i + 1)
   })
   const warnings = bad.length
-    ? [`${bad.length} linha(s) fora do formato "usuario: comentário" foram ignoradas (linhas ${bad.slice(0, 10).join(', ')}${bad.length > 10 ? '…' : ''}).`]
+    ? [t.linesSkipped(bad.length, `${bad.slice(0, 10).join(', ')}${bad.length > 10 ? '…' : ''}`)]
     : []
   return { comments, warnings }
 }
 
 /** Detecta o formato (JSON, CSV com cabeçalho ou "usuario: comentário") e converte. */
-export function parseImport(raw: string): ParseResult {
+export function parseImport(raw: string, t: ParseText = parseText.pt): ParseResult {
   const text = raw.replace(/^﻿/, '').trim()
   if (!text) return { comments: [], warnings: [] }
-  if (text.startsWith('[') || text.startsWith('{')) return parseJson(text)
-  if (looksLikeCsv(text.split(/\r?\n/, 1)[0])) return parseCsv(text)
-  return parseLines(text)
+  if (text.startsWith('[') || text.startsWith('{')) return parseJson(text, t)
+  if (looksLikeCsv(text.split(/\r?\n/, 1)[0])) return parseCsv(text, t)
+  return parseLines(text, t)
 }

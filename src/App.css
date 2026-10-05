@@ -991,3 +991,13 @@ button:focus-visible,
     animation: none;
   }
 }
+
+.app-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.lang-switch {
+  flex: none;
+  align-self: center;
+}

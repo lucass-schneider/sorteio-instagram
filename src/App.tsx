@@ -3,6 +3,8 @@ import { DrawPanel } from './components/DrawPanel'
 import { ParticipantsPanel } from './components/ParticipantsPanel'
 import { RulesPanel } from './components/RulesPanel'
 import { SourcePanel, type SourceInfo } from './components/SourcePanel'
+import { useI18n } from './i18n/context'
+import type { Lang } from './i18n/lib'
 import { DEFAULT_RULES, evaluate } from './lib/rules'
 import type { IgComment, Rules } from './lib/types'
 import './App.css'
@@ -19,6 +21,7 @@ function loadRules(): Rules {
 }
 
 export default function App() {
+  const { t, lang, setLang } = useI18n()
   const [comments, setComments] = useState<IgComment[]>([])
   const [source, setSource] = useState<SourceInfo | null>(null)
   const [sourceVersion, setSourceVersion] = useState(0)
@@ -32,7 +35,7 @@ export default function App() {
     }
   }, [rules])
 
-  const evaluation = useMemo(() => evaluate(comments, rules), [comments, rules])
+  const evaluation = useMemo(() => evaluate(comments, rules, t.rule), [comments, rules, t])
 
   function handleLoaded(loaded: IgComment[], info: SourceInfo) {
     setComments(loaded)
@@ -48,6 +51,11 @@ export default function App() {
     }
   }
 
+  const languages: Array<[Lang, string]> = [
+    ['pt', 'PT'],
+    ['en', 'EN'],
+  ]
+
   return (
     <>
       <header className="app-header">
@@ -58,9 +66,16 @@ export default function App() {
               <path d="M12 8v13M3 12h18M7.5 8a2.5 2.5 0 1 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 1 1 0 5" />
             </svg>
           </div>
-          <div>
-            <h1>Sorteio de comentários</h1>
-            <p>Carregue os comentários de uma publicação do Instagram, defina as regras e sorteie.</p>
+          <div className="app-heading">
+            <h1>{t.app.title}</h1>
+            <p>{t.app.subtitle}</p>
+          </div>
+          <div className="segmented lang-switch" role="group" aria-label={t.app.language}>
+            {languages.map(([code, label]) => (
+              <button key={code} className={lang === code ? 'active' : ''} aria-pressed={lang === code} onClick={() => setLang(code)}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -80,7 +95,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer container">
-        <a href="./privacidade.html">Política de Privacidade</a>
+        <a href={t.app.privacyHref}>{t.app.privacy}</a>
       </footer>
     </>
   )

@@ -1,3 +1,4 @@
+import { ruleText, type RuleText } from '../i18n/lib'
 import type { CommentResult, Evaluation, IgComment, ParticipantResult, Rules } from './types'
 
 export const DEFAULT_RULES: Rules = {
@@ -44,40 +45,31 @@ export function extractMentions(text: string): string[] {
   return [...found]
 }
 
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`
-}
-
-function range(min: number, max: number | null, singular: string, pluralForm: string): string | null {
-  if (max !== null && min === max) return `exatamente ${plural(max, singular, pluralForm)}`
-  if (max !== null && min > 0) return `de ${min} a ${plural(max, singular, pluralForm)}`
-  if (max !== null) return `no máximo ${plural(max, singular, pluralForm)}`
-  if (min > 0) return `no mínimo ${plural(min, singular, pluralForm)}`
+function range(min: number, max: number | null, unit: [string, string], t: RuleText): string | null {
+  if (max !== null && min === max) return t.exactly(max, unit)
+  if (max !== null && min > 0) return t.between(min, max, unit)
+  if (max !== null) return t.atMost(max, unit)
+  if (min > 0) return t.atLeast(min, unit)
   return null
 }
 
 /** Resumo legível dos critérios ativos (para conferência e para o resultado copiado). */
-export function describeRules(rules: Rules): string[] {
+export function describeRules(rules: Rules, t: RuleText = ruleText.pt, locale = 'pt-BR'): string[] {
   const lines: string[] = []
-  const mentions = range(rules.minMentions, rules.maxMentions, 'pessoa marcada', 'pessoas marcadas')
-  if (mentions) lines.push(`Cada comentário: ${mentions}`)
-  if (rules.uniqueMentionsAcrossComments) lines.push('Não pode repetir a mesma pessoa em comentários diferentes')
-  if (rules.requiredText.trim()) lines.push(`Comentário precisa conter "${rules.requiredText.trim()}"`)
-  const comments = range(rules.minComments, rules.maxComments, 'comentário válido', 'comentários válidos')
-  if (comments) lines.push(`Cada pessoa: ${comments}`)
+  const mentions = range(rules.minMentions, rules.maxMentions, t.mentionUnit, t)
+  if (mentions) lines.push(t.eachComment(mentions))
+  if (rules.uniqueMentionsAcrossComments) lines.push(t.noRepeat)
+  if (rules.requiredText.trim()) lines.push(t.mustContain(rules.requiredText.trim()))
+  const comments = range(rules.minComments, rules.maxComments, t.validCommentUnit, t)
+  if (comments) lines.push(t.eachPerson(comments))
   if (rules.maxComments !== null) {
-    lines.push(
-      rules.overLimit === 'disqualify'
-        ? `Quem comentar mais de ${rules.maxComments}x é desclassificado`
-        : `Quem comentar mais de ${rules.maxComments}x: valem só os primeiros`,
-    )
+    lines.push(rules.overLimit === 'disqualify' ? t.overDisqualify(rules.maxComments) : t.overFirstN(rules.maxComments))
   }
-  if (rules.deadline) lines.push(`Comentários até ${new Date(rules.deadline).toLocaleString('pt-BR')}`)
-  lines.push(rules.includeReplies ? 'Respostas a comentários contam' : 'Respostas a comentários não contam')
-  if (parseUsernameList(rules.excludedUsers).size) {
-    lines.push(`Perfis excluídos: ${[...parseUsernameList(rules.excludedUsers)].map((u) => '@' + u).join(', ')}`)
-  }
-  lines.push(rules.ticketMode === 'perUser' ? 'Uma chance por pessoa' : 'Uma chance por comentário válido')
+  if (rules.deadline) lines.push(t.until(new Date(rules.deadline).toLocaleString(locale)))
+  lines.push(rules.includeReplies ? t.repliesCount : t.repliesDontCount)
+  const excluded = parseUsernameList(rules.excludedUsers)
+  if (excluded.size) lines.push(t.excludedList([...excluded].map((u) => '@' + u).join(', ')))
+  lines.push(rules.ticketMode === 'perUser' ? t.perUser : t.perComment)
   return lines
 }
 
@@ -86,7 +78,7 @@ function timeOf(comment: IgComment): number {
   return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
 }
 
-export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
+export function evaluate(comments: IgComment[], rules: Rules, t: RuleText = ruleText.pt): Evaluation {
   const excluded = parseUsernameList(rules.excludedUsers)
   const ignoredMentions = parseUsernameList(rules.ignoredMentions)
   const deadline = rules.deadline ? new Date(rules.deadline).getTime() : null
@@ -94,7 +86,7 @@ export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
 
   const byUser = new Map<string, IgComment[]>()
   for (const comment of comments) {
-    const key = normalizeUsername(comment.username) || '(sem usuário)'
+    const key = normalizeUsername(comment.username) || t.noUser
     const list = byUser.get(key)
     if (list) list.push(comment)
     else byUser.set(key, [comment])
@@ -113,15 +105,15 @@ export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
     }))
     const userReasons: string[] = []
 
-    if (excluded.has(username)) userReasons.push('Perfil excluído do sorteio')
+    if (excluded.has(username)) userReasons.push(t.excluded)
 
     // 1) Filtros que fazem o comentário nem ser considerado.
     const considered: CommentResult[] = []
     for (const r of results) {
       if (r.comment.isReply && !rules.includeReplies) {
-        r.reasons.push('Resposta a outro comentário (respostas não contam)')
+        r.reasons.push(t.reply)
       } else if (deadline !== null && timeOf(r.comment) > deadline) {
-        r.reasons.push(r.comment.timestamp ? 'Feito depois do prazo' : 'Sem data (não dá para checar o prazo)')
+        r.reasons.push(r.comment.timestamp ? t.late : t.noDate)
       } else {
         considered.push(r)
       }
@@ -131,13 +123,11 @@ export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
     let evaluated = considered
     if (rules.maxComments !== null && considered.length > rules.maxComments) {
       if (rules.overLimit === 'disqualify') {
-        userReasons.push(
-          `Comentou ${considered.length} vezes (máximo ${rules.maxComments})`,
-        )
+        userReasons.push(t.commentedTooMuch(considered.length, rules.maxComments))
       } else {
         evaluated = considered.slice(0, rules.maxComments)
         for (const r of considered.slice(rules.maxComments)) {
-          r.reasons.push(`Passou do limite de ${plural(rules.maxComments, 'comentário', 'comentários')}`)
+          r.reasons.push(t.overLimit(rules.maxComments))
         }
       }
     }
@@ -151,24 +141,18 @@ export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
       r.mentions = mentions
 
       if (requiredText && !r.comment.text.toLowerCase().includes(requiredText)) {
-        r.reasons.push(`Não contém "${rules.requiredText.trim()}"`)
+        r.reasons.push(t.missingText(rules.requiredText.trim()))
       }
       if (mentions.length < rules.minMentions) {
-        r.reasons.push(
-          `Marcou ${plural(mentions.length, 'pessoa', 'pessoas')} (mínimo ${rules.minMentions})`,
-        )
+        r.reasons.push(t.tooFewMentions(mentions.length, rules.minMentions))
       }
       if (rules.maxMentions !== null && mentions.length > rules.maxMentions) {
-        r.reasons.push(
-          `Marcou ${plural(mentions.length, 'pessoa', 'pessoas')} (máximo ${rules.maxMentions})`,
-        )
+        r.reasons.push(t.tooManyMentions(mentions.length, rules.maxMentions))
       }
       if (rules.uniqueMentionsAcrossComments) {
         const repeated = mentions.filter((m) => usedMentions.has(m))
         if (repeated.length > 0) {
-          r.reasons.push(
-            `Repetiu quem já tinha marcado: ${repeated.map((m) => '@' + m).join(', ')}`,
-          )
+          r.reasons.push(t.repeated(repeated.map((m) => '@' + m).join(', ')))
         }
       }
 
@@ -180,11 +164,9 @@ export function evaluate(comments: IgComment[], rules: Rules): Evaluation {
 
     if (userReasons.length === 0) {
       if (validCount === 0) {
-        userReasons.push('Nenhum comentário válido')
+        userReasons.push(t.noValid)
       } else if (validCount < rules.minComments) {
-        userReasons.push(
-          `Só ${plural(validCount, 'comentário válido', 'comentários válidos')} (mínimo ${rules.minComments})`,
-        )
+        userReasons.push(t.tooFewComments(validCount, rules.minComments))
       }
     }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_RULES, evaluate, extractMentions } from './rules'
+import { ruleText } from '../i18n/lib'
+import { DEFAULT_RULES, describeRules, evaluate, extractMentions } from './rules'
 import type { IgComment, Rules } from './types'
 
 let seq = 0
@@ -112,5 +113,13 @@ describe('evaluate', () => {
   it('dá um bilhete por comentário válido quando configurado', () => {
     const result = evaluate([c('a', 'x'), c('a', 'y'), c('b', 'z')], { ...DEFAULT_RULES, ticketMode: 'perComment' })
     expect(result.stats.tickets).toBe(3)
+  })
+
+  it('gera motivos e resumo em inglês', () => {
+    const result = evaluate([c('a', '1'), c('a', '2'), c('a', '3'), c('', 'x')], { ...DEFAULT_RULES, maxComments: 2 }, ruleText.en)
+    const byName = Object.fromEntries(result.participants.map((p) => [p.username, p]))
+    expect(byName.a.reasons[0]).toBe('Commented 3 times (maximum 2)')
+    expect(byName['(no username)']).toBeDefined()
+    expect(describeRules({ ...DEFAULT_RULES, minMentions: 2, maxMentions: 2 }, ruleText.en)[0]).toBe('Each comment: exactly 2 tagged people')
   })
 })
