@@ -90,6 +90,7 @@ const pt = {
     cannotRead: (detail: string) => `Não foi possível ler: ${detail}`,
     loaded: (count: number) => `${count} comentários carregados`,
     profile: 'perfil',
+    rulesReset: 'Novo post ou perfil: os critérios voltaram ao padrão para este sorteio.',
     missingUsernames: (missing: number, total: number, fields: string) =>
       `A API do Instagram não informou o @ de ${missing} de ${total} comentários. Campos recebidos: ${fields || 'nenhum'}.`,
     fewerThanExpected: (expected: number, got: number) =>
@@ -295,6 +296,7 @@ const en: Messages = {
     cannotRead: (detail: string) => `Could not read it: ${detail}`,
     loaded: (count: number) => `${count} comments loaded`,
     profile: 'profile',
+    rulesReset: 'New post or profile: the rules were reset to the defaults for this giveaway.',
     missingUsernames: (missing: number, total: number, fields: string) =>
       `The Instagram API did not return the username for ${missing} of ${total} comments. Fields received: ${fields || 'none'}.`,
     fewerThanExpected: (expected: number, got: number) =>

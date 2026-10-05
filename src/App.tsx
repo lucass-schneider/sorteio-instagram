@@ -6,10 +6,33 @@ import { SourcePanel, type SourceInfo } from './components/SourcePanel'
 import { useI18n } from './i18n/context'
 import type { Lang } from './i18n/lib'
 import { DEFAULT_RULES, evaluate } from './lib/rules'
+import { sourceKey } from './lib/sourceKey'
 import type { IgComment, Rules } from './lib/types'
 import './App.css'
 
 const RULES_KEY = 'sorteio.rules'
+/** Post + perfil a que os critérios salvos pertencem. */
+const SOURCE_KEY = 'sorteio.rulesSource'
+
+// Cópia em memória para quando o navegador não deixa salvar (a comparação vale enquanto a página estiver aberta).
+let memorySourceKey: string | null = null
+
+function readSourceKey(): string | null {
+  try {
+    return localStorage.getItem(SOURCE_KEY) ?? memorySourceKey
+  } catch {
+    return memorySourceKey
+  }
+}
+
+function writeSourceKey(value: string) {
+  memorySourceKey = value
+  try {
+    localStorage.setItem(SOURCE_KEY, value)
+  } catch {
+    // Fica só a cópia em memória.
+  }
+}
 
 function loadRules(): Rules {
   try {
@@ -39,16 +62,24 @@ export default function App() {
 
   function handleLoaded(loaded: IgComment[], info: SourceInfo) {
     setComments(loaded)
-    setSource(info)
     setSourceVersion((v) => v + 1)
+
+    // Outro post ou outro perfil = outro sorteio: os critérios voltam ao padrão.
     // O próprio perfil do sorteio normalmente não participa nem conta como marcação.
-    if (info.owner) {
+    const ownerTag = info.owner ? `@${info.owner}` : ''
+    const key = sourceKey(info.label, info.owner)
+    const rulesReset = key !== readSourceKey()
+    if (rulesReset) {
+      setRules({ ...DEFAULT_RULES, excludedUsers: ownerTag, ignoredMentions: ownerTag })
+      writeSourceKey(key)
+    } else if (ownerTag) {
       setRules((r) => ({
         ...r,
-        excludedUsers: r.excludedUsers.trim() ? r.excludedUsers : `@${info.owner}`,
-        ignoredMentions: r.ignoredMentions.trim() ? r.ignoredMentions : `@${info.owner}`,
+        excludedUsers: r.excludedUsers.trim() ? r.excludedUsers : ownerTag,
+        ignoredMentions: r.ignoredMentions.trim() ? r.ignoredMentions : ownerTag,
       }))
     }
+    setSource({ ...info, rulesReset })
   }
 
   const languages: Array<[Lang, string]> = [

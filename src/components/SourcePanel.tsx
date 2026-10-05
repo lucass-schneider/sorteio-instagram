@@ -10,6 +10,8 @@ export interface SourceInfo {
   label: string
   owner?: string
   warnings: string[]
+  /** true quando o post ou o perfil mudou e os critérios voltaram ao padrão. */
+  rulesReset?: boolean
 }
 
 interface Props {
@@ -265,6 +267,7 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
               </span>
             )}
           </p>
+          {info.rulesReset && <p className="muted">{t.source.rulesReset}</p>}
           {info.warnings.map((w) => (
             <p key={w} className="status warn">
               {w}

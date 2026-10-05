@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseImport } from './parse'
 import { drawWinners } from './random'
 import { extractShortcode } from './instagram'
+import { sourceKey } from './sourceKey'
 
 describe('parseImport', () => {
   it('lê JSON com respostas aninhadas', () => {
@@ -53,5 +54,14 @@ describe('drawWinners', () => {
       const winners = drawWinners(entries, 5)
       expect(winners.sort()).toEqual(['a', 'b'])
     }
+  })
+})
+
+describe('sourceKey', () => {
+  it('mesmo post com links diferentes dá a mesma chave; outro post ou perfil muda', () => {
+    const a = sourceKey('https://www.instagram.com/p/ABC123/', 'Loja')
+    expect(sourceKey('https://instagram.com/p/ABC123/?igsh=xyz', 'loja')).toBe(a)
+    expect(sourceKey('https://www.instagram.com/p/OUTRO1/', 'loja')).not.toBe(a)
+    expect(sourceKey('https://www.instagram.com/p/ABC123/', 'outra')).not.toBe(a)
   })
 })
