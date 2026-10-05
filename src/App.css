@@ -637,7 +637,7 @@ button:focus-visible,
 /* ---------- Sorteio ---------- */
 
 .draw-controls {
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   align-items: end;
 }
 
@@ -649,22 +649,6 @@ button:focus-visible,
   .draw-controls .primary {
     grid-column: 1 / -1;
   }
-}
-
-.roller {
-  display: grid;
-  place-items: center;
-  min-height: 110px;
-  border-radius: 12px;
-  background: var(--gradient);
-  color: #fff;
-  font-size: clamp(1.4rem, 5vw, 2.1rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  padding: 0 16px;
-  text-align: center;
 }
 
 .result {
@@ -816,4 +800,194 @@ button:focus-visible,
 
 .app-footer a {
   color: var(--muted);
+}
+
+/* ---------- Tela do sorteio (lista -> contagem -> resultado) ---------- */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 16px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 20% 10%, rgb(150 47 191 / 55%), transparent 55%),
+    radial-gradient(circle at 85% 90%, rgb(250 126 30 / 45%), transparent 50%),
+    #120d18;
+  animation: stage-in 0.3s ease-out both;
+}
+
+.stage-inner {
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.stage-kicker {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 70%);
+}
+
+.stage-title {
+  font-size: clamp(1.3rem, 4vw, 2rem);
+  letter-spacing: -0.01em;
+}
+
+.stage-list {
+  width: 100%;
+  height: min(58vh, 520px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent);
+}
+
+.stage-scroll {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: stage-scroll linear infinite;
+}
+
+.stage-scroll li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.stage-scroll strong {
+  color: #feda75;
+}
+
+.stage-scroll span {
+  color: rgb(255 255 255 / 85%);
+}
+
+.stage-count {
+  font-size: clamp(7rem, 32vw, 15rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: stage-pop 1s ease-out both;
+}
+
+.stage-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.stage-winner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.2) both;
+}
+
+.stage-winner-name {
+  font-size: clamp(2rem, 9vw, 4.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.stage-winner-name small {
+  font-size: 0.5em;
+}
+
+.stage-winner-comment {
+  max-width: 560px;
+  color: rgb(255 255 255 / 80%);
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.stage-alternates {
+  color: rgb(255 255 255 / 75%);
+}
+
+.stage-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.stage-button {
+  padding: 11px 26px;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d1a22;
+}
+
+.stage-button.ghost-dark {
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  border-color: rgb(255 255 255 / 25%);
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes stage-scroll {
+  to {
+    transform: translateY(calc(-50% - 5px));
+  }
+}
+
+@keyframes stage-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-scroll,
+  .stage-count,
+  .stage-winner {
+    animation: none;
+  }
 }

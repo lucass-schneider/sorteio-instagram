@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { drawWinners } from '../lib/random'
 import { describeRules } from '../lib/rules'
 import type { Evaluation, ParticipantResult, Rules } from '../lib/types'
+import { DrawStage, type StagePhase } from './DrawStage'
 import { CommentLine } from './ParticipantsPanel'
 
 interface DrawResult {
@@ -14,7 +15,8 @@ interface DrawResult {
   evaluation: Evaluation
 }
 
-const ROLL_MS = 2400
+/** Quanto tempo a lista de comentários aparece antes da contagem. */
+const LIST_MS = 6000
 
 function resultText(result: DrawResult): string {
   const lines = [
@@ -54,16 +56,28 @@ function WinnerCard({ participant, label, delay }: { participant: ParticipantRes
 export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules: Rules }) {
   const [winnersCount, setWinnersCount] = useState(1)
   const [alternatesCount, setAlternatesCount] = useState(0)
-  const [rolling, setRolling] = useState<string | null>(null)
+  const [countdownSeconds, setCountdownSeconds] = useState(5)
+  const [stage, setStage] = useState<{ phase: StagePhase; count: number; result: DrawResult; pool: ParticipantResult[] } | null>(null)
   const [result, setResult] = useState<DrawResult | null>(null)
   const [copied, setCopied] = useState(false)
-  const timer = useRef<number | undefined>(undefined)
+  const timers = useRef<number[]>([])
 
-  useEffect(() => () => window.clearInterval(timer.current), [])
+  const clearTimers = () => {
+    timers.current.forEach((t) => window.clearTimeout(t))
+    timers.current = []
+  }
+  useEffect(() => clearTimers, [])
 
   const pool = evaluation.participants.filter((p) => p.qualified)
   const requested = winnersCount + alternatesCount
-  const canDraw = pool.length > 0 && rolling === null
+  const running = stage !== null && stage.phase !== 'done'
+  const canDraw = pool.length > 0 && !running
+
+  function finish(final: DrawResult) {
+    clearTimers()
+    setResult(final)
+    setStage((s) => (s ? { ...s, phase: 'done', count: 0 } : s))
+  }
 
   function start() {
     // O resultado é definido aqui, com gerador criptográfico; a animação é só visual.
@@ -85,19 +99,15 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
 
     setResult(null)
     setCopied(false)
-    const names = pool.map((p) => p.username)
-    const startedAt = performance.now()
-    window.clearInterval(timer.current)
-    timer.current = window.setInterval(() => {
-      if (performance.now() - startedAt >= ROLL_MS) {
-        window.clearInterval(timer.current)
-        setRolling(null)
-        setResult(final)
-        return
-      }
-      setRolling(names[Math.floor(Math.random() * names.length)])
-    }, 70)
-    setRolling(names[0])
+    clearTimers()
+    setStage({ phase: 'list', count: countdownSeconds, result: final, pool })
+
+    // Lista de comentários -> contagem regressiva (1 por segundo) -> resultado.
+    const later = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms))
+    for (let i = 0; i < countdownSeconds; i++) {
+      later(LIST_MS + i * 1000, () => setStage((s) => (s ? { ...s, phase: 'countdown', count: countdownSeconds - i } : s)))
+    }
+    later(LIST_MS + countdownSeconds * 1000, () => finish(final))
   }
 
   async function copy() {
@@ -146,8 +156,18 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
             onChange={(e) => setAlternatesCount(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
           />
         </label>
+        <label className="field">
+          <span>Contagem</span>
+          <select value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))}>
+            {[3, 5, 10].map((n) => (
+              <option key={n} value={n}>
+                {n} segundos
+              </option>
+            ))}
+          </select>
+        </label>
         <button className="primary big" disabled={!canDraw} onClick={start}>
-          {rolling !== null ? 'Sorteando…' : result ? 'Sortear de novo' : 'Sortear'}
+          {running ? 'Sorteando…' : result ? 'Sortear de novo' : 'Sortear'}
         </button>
       </div>
 
@@ -157,10 +177,16 @@ export function DrawPanel({ evaluation, rules }: { evaluation: Evaluation; rules
         </p>
       )}
 
-      {rolling !== null && (
-        <div className="roller" aria-live="polite">
-          <span>@{rolling}</span>
-        </div>
+      {stage && (
+        <DrawStage
+          phase={stage.phase}
+          pool={stage.pool}
+          count={stage.count}
+          winners={stage.result.winners}
+          alternates={stage.result.alternates}
+          onSkip={() => finish(stage.result)}
+          onClose={() => setStage(null)}
+        />
       )}
 
       {result && (
