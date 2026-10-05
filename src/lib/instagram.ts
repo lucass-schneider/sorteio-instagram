@@ -24,6 +24,10 @@ export interface FetchResult {
   owner?: string
   permalink?: string
   expectedCount?: number
+  /** Comentários que vieram sem o @ de quem comentou. */
+  missingUsernames: number
+  /** Campos que a API devolveu num comentário sem @ (para diagnóstico). */
+  sampleFields?: string[]
 }
 
 interface Paged<T> {
@@ -36,7 +40,7 @@ interface ApiComment {
   text?: string
   timestamp?: string
   username?: string
-  from?: { username?: string }
+  from?: { id?: string; username?: string }
   replies?: Paged<ApiComment>
 }
 
@@ -181,12 +185,20 @@ export async function fetchPostComments(
     media = await findMedia(token, kind, shortcode, onProgress, signal)
   }
 
-  const commentFields = 'id,text,timestamp,username'
+  // O @ pode vir em "username" ou em "from"; pedimos os dois.
+  const commentFields = 'id,text,timestamp,username,from'
   const url = `${base}/${media.id}/comments?fields=${commentFields},replies.limit(100){${commentFields}}&limit=100`
 
   const comments: IgComment[] = []
+  let sampleFields: string[] | undefined
+  const inspect = (c: ApiComment) => {
+    if (!sampleFields && !c.username && !c.from?.username) {
+      sampleFields = Object.keys(c).concat(c.from ? Object.keys(c.from).map((k) => `from.${k}`) : [])
+    }
+  }
   for await (const batch of pages<ApiComment>(url, token, signal)) {
     for (const c of batch) {
+      inspect(c)
       comments.push(toComment(c, false))
       if (c.replies) {
         c.replies.data.forEach((r) => comments.push(toComment(r, true)))
@@ -207,5 +219,7 @@ export async function fetchPostComments(
     owner: media.username,
     permalink: media.permalink,
     expectedCount: media.comments_count,
+    missingUsernames: comments.filter((c) => !c.username).length,
+    sampleFields,
   }
 }

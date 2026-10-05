@@ -58,6 +58,12 @@ export function SourcePanel({ info, count, onLoaded }: Props) {
         manualToken ? tokenKind(manualToken) : 'instagram',
       )
       const warnings: string[] = []
+      if (result.missingUsernames > 0) {
+        warnings.push(
+          `A API do Instagram não informou o @ de ${result.missingUsernames} de ${result.comments.length} comentários. ` +
+            `Campos recebidos: ${result.sampleFields?.join(', ') || 'nenhum'}.`,
+        )
+      }
       if (result.expectedCount && result.comments.length < result.expectedCount) {
         warnings.push(
           `O Instagram informa ~${result.expectedCount} comentários, mas a API entregou ${result.comments.length}. ` +
