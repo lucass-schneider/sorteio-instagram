@@ -61,3 +61,7 @@ porque a troca do código pelo token usa a chave secreta do app, que não pode f
 - Uma chance por pessoa ou uma chance por comentário válido
 
 O sorteio usa `crypto.getRandomValues` (gerador criptográfico) e permite ganhadores e suplentes.
+
+## Acesso para outras contas
+
+O passo a passo para pedir à Meta o acesso avançado (outras contas profissionais sem precisar ser testadoras) está em [`meta-review/`](meta-review/README.md).
