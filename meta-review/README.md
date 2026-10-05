@@ -23,8 +23,8 @@ testadora. Para isso a Meta exige **acesso avançado** às permissões `instagra
 - [x] Chamadas bem-sucedidas à API com as duas permissões
 
 **Configurações do app (painel da Meta → Configurações do app → Básico)**
-- [ ] Enviar o ícone `app-icon-1024.png`
-- [ ] Escolher a categoria (sugestão: *Utilidades e produtividade*)
+- [x] Enviar o ícone `app-icon-1024.png`
+- [x] Escolher a categoria (*Utilitários e produtividade*)
 - [ ] Conferir o e-mail de contato
 
 **Verificação da empresa**
